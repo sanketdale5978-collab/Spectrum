@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spectra Lens</title>
+  <link rel="stylesheet" href="/statics/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<header class="header">
+  <span class="logo">◈ SPECTRA LENS</span>
+  <div class="header-actions">
+    <button class="btn primary" id="upload-btn">⬆ Upload Image</button>
+    <input type="file" id="file-input" accept="image/*" style="display:none" />
+  </div>
+</header>
+
+<!-- ── Status bar ─────────────────────────────────────────────────────── -->
+<div style="padding:0 12px">
+  <div class="status-bar" id="status-bar">Ready</div>
+</div>
+
+<!-- ── Upload placeholder ─────────────────────────────────────────────── -->
+<div style="padding:12px" id="upload-placeholder">
+  <div id="upload-area">
+    <div class="upload-icon">🔬</div>
+    <p>Drop an image here or click Upload Image above</p>
+    <small>JPG / PNG / BMP — up to 32 MB</small>
+    <div class="slider-row" style="justify-content:center">
+      <span>Block size:</span>
+      <input type="range" id="block-slider" min="2" max="32" value="8" />
+      <span id="block-label">8 px</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main layout (hidden until image loaded) ─────────────────────────── -->
+<div class="main hidden" id="main-layout">
+
+  <!-- LEFT column: canvas + overlay controls -->
+  <div class="left-col">
+
+    <div class="card">
+      <div class="card-title">Bitmap Canvas</div>
+      <div id="canvas-wrapper">
+        <canvas id="bitmap-canvas"></canvas>
+      </div>
+
+      <!-- Overlay controls -->
+      <div style="margin-top:10px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">OVERLAY</div>
+        <div class="overlay-row">
+          <button class="overlay-btn active" data-mode="none" data-label="None">None</button>
+          <button class="overlay-btn" data-mode="peak" data-label="Peak λ">Peak λ</button>
+          <button class="overlay-btn" data-mode="energy" data-label="Energy">Energy</button>
+          <button class="overlay-btn" data-mode="red_ratio" data-label="Red Ratio">Red Ratio</button>
+          <button class="overlay-btn" data-mode="green_ratio" data-label="Green Ratio">Green Ratio</button>
+          <button class="overlay-btn" data-mode="blue_ratio" data-label="Blue Ratio">Blue Ratio</button>
+        </div>
+      </div>
+
+      <!-- Compare mode toggle -->
+      <div style="margin-top:10px">
+        <button class="btn" id="compare-toggle">Compare Mode</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT column: inspector + charts -->
+  <div class="right-col">
+
+    <!-- Pixel inspector -->
+    <div class="card" id="inspector-card">
+      <div class="card-title">Pixel Inspector</div>
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div id="inspector-swatch" class="inspector-swatch"></div>
+        <div class="inspector-grid">
+          <span class="inspector-label">Position</span>
+          <span class="inspector-value" id="insp-pos">—</span>
+          <span class="inspector-label">RGB</span>
+          <span class="inspector-value" id="insp-rgb">—</span>
+          <span class="inspector-label">HEX</span>
+          <span class="inspector-value" id="insp-hex">—</span>
+          <span class="inspector-label">HSL</span>
+          <span class="inspector-value" id="insp-hsl">—</span>
+          <span class="inspector-label">Peak λ</span>
+          <span class="inspector-value" id="insp-peak">—</span>
+          <span class="inspector-label">Energy</span>
+          <span class="inspector-value" id="insp-energy">—</span>
+          <span class="inspector-label">Color Temp</span>
+          <span class="inspector-value" id="insp-cct">—</span>
+          <span class="inspector-label">Category</span>
+          <span class="inspector-value" id="insp-category">—</span>
+        </div>
+      </div>
+
+      <!-- Single spectrum chart -->
+      <div class="chart-box mt-3" style="height:140px">
+        <canvas id="single-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Compare panel -->
+    <div class="card hidden" id="compare-panel">
+      <div class="card-title">Comparison View</div>
+      <p class="compare-hint" id="compare-hint">Click pixel A on the canvas</p>
+
+      <div id="compare-stats" class="hidden">
+        <div class="compare-cols">
+          <div class="col-a">
+            <div class="compare-col-label">● Pixel A</div>
+            <div class="inspector-grid">
+              <span class="inspector-label">HEX</span>
+              <span class="inspector-value" id="cmp-hex-a">—</span>
+              <span class="inspector-label">Peak</span>
+              <span class="inspector-value" id="cmp-peak-a">—</span>
+              <span class="inspector-label">Energy</span>
+              <span class="inspector-value" id="cmp-energy-a">—</span>
+            </div>
+          </div>
+          <div class="col-b">
+            <div class="compare-col-label">● Pixel B</div>
+            <div class="inspector-grid">
+              <span class="inspector-label">HEX</span>
+              <span class="inspector-value" id="cmp-hex-b">—</span>
+              <span class="inspector-label">Peak</span>
+              <span class="inspector-value" id="cmp-peak-b">—</span>
+              <span class="inspector-label">Energy</span>
+              <span class="inspector-value" id="cmp-energy-b">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="compare-stat-row">
+          <span>Spectral Distance</span>
+          <span id="cmp-spectral-dist">—</span>
+        </div>
+        <div class="compare-stat-row">
+          <span>Peak Δ</span>
+          <span id="cmp-peak-diff">—</span>
+        </div>
+        <div class="compare-stat-row">
+          <span>Metameric Risk</span>
+          <span id="cmp-metameric" class="risk-low">—</span>
+        </div>
+      </div>
+
+      <!-- Compare spectrum chart -->
+      <div class="chart-box mt-3" style="height:160px">
+        <canvas id="compare-chart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FULL ROW: Summary dashboard -->
+  <div class="full-row">
+
+    <!-- KPI strip -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Blocks</div>
+        <div class="kpi-value" id="kpi-blocks">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Warm Pixels</div>
+        <div class="kpi-value" style="color:var(--warm)" id="kpi-warm">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Cool Pixels</div>
+        <div class="kpi-value" style="color:var(--cool)" id="kpi-cool">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Warm Ratio</div>
+        <div class="kpi-value" id="kpi-ratio">—</div>
+      </div>
+    </div>
+
+    <!-- Summary charts row -->
+    <div class="summary-grid">
+
+      <div class="card">
+        <div class="card-title">Avg Spectrum (Image-Wide)</div>
+        <div class="chart-box" style="height:160px">
+          <canvas id="avg-spec-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Peak Wavelength Distribution</div>
+        <div class="chart-box" style="height:160px">
+          <canvas id="peak-hist-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Warm vs Cool Ratio</div>
+        <div class="chart-box" style="height:160px">
+          <canvas id="warm-cool-chart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Top 5 Dominant Colors</div>
+        <div class="swatch-row" id="top5-swatches">
+          <span style="color:var(--muted);font-size:12px">Upload an image to see results</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Spectral Energy Profile (Avg)</div>
+        <div class="chart-box" style="height:160px">
+          <canvas id="energy-dist-chart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Export section -->
+    <div class="card">
+      <div class="card-title">Export for Power BI</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        CSV: every pixel block with x, y, R, G, B, HEX, HSL, peak_nm, energy, category + 401 wavelength columns.<br>
+        Excel: two sheets — Pixel_Data (metadata) and Spectra (wavelength values).
+      </p>
+      <div class="export-row">
+        <button class="btn primary" id="export-csv">⬇ Download CSV</button>
+        <button class="btn" id="export-excel">⬇ Download Excel</button>
+        <button class="btn" id="copy-api">⎘ Copy API Endpoint</button>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /main -->
+
+<!-- ── Scripts ──────────────────────────────────────────────────────────── -->
+<script src="/statics/canvas.js"></script>
+<script src="/statics/charts.js"></script>
+<script src="/statics/heatmap.js"></script>
+<script src="/statics/compare.js"></script>
+<script src="/statics/export.js"></script>
+
+<script>
+// ── Main application controller ────────────────────────────────────────────
+
+const statusBar = document.getElementById("status-bar");
+
+function setStatus(msg, type = "info") {
+  statusBar.textContent = msg;
+  statusBar.className = `status-bar ${type}`;
+}
+
+function clearStatus() {
+  statusBar.className = "status-bar";
+}
+
+// ── Init charts ─────────────────────────────────────────────────────────────
+Charts.initSingleChart("single-chart");
+Charts.initCompareChart("compare-chart");
+Charts.initAvgSpecChart("avg-spec-chart");
+Charts.initPeakHistChart("peak-hist-chart");
+Charts.initWarmCoolChart("warm-cool-chart");
+Charts.initEnergyDistChart("energy-dist-chart");
+
+// ── Bind canvas ─────────────────────────────────────────────────────────────
+CanvasManager.init(
+  document.getElementById("bitmap-canvas"),
+  async (x, y, isB) => {
+    if (CompareManager) {
+      await CompareManager.onPixelSelected(x, y, isB);
+    }
+    if (!isB) {
+      await fetchPixel(x, y);
+    }
+  }
+);
+
+// ── Bind UI modules ─────────────────────────────────────────────────────────
+HeatmapManager.bindButtons();
+CompareManager.bindToggle();
+ExportManager.bindButtons();
+
+// ── Block size slider ────────────────────────────────────────────────────────
+const blockSlider = document.getElementById("block-slider");
+const blockLabel  = document.getElementById("block-label");
+blockSlider.addEventListener("input", () => {
+  blockLabel.textContent = blockSlider.value + " px";
+});
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+document.getElementById("upload-btn").addEventListener("click", () => {
+  document.getElementById("file-input").click();
+});
+
+document.getElementById("file-input").addEventListener("change", (e) => {
+  if (e.target.files[0]) uploadImage(e.target.files[0]);
+});
+
+// Drag and drop
+const uploadArea = document.getElementById("upload-area");
+uploadArea.addEventListener("dragover", e => { e.preventDefault(); uploadArea.classList.add("dragover"); });
+uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("dragover"));
+uploadArea.addEventListener("drop", e => {
+  e.preventDefault();
+  uploadArea.classList.remove("dragover");
+  if (e.dataTransfer.files[0]) uploadImage(e.dataTransfer.files[0]);
+});
+uploadArea.addEventListener("click", () => document.getElementById("file-input").click());
+
+async function uploadImage(file) {
+  setStatus("Uploading and processing image…", "info");
+
+  const fd = new FormData();
+  fd.append("image", file);
+  fd.append("block_size", blockSlider.value);
+
+  try {
+    const res = await fetch("/upload", { method: "POST", body: fd });
+    const data = await res.json();
+
+    if (data.error) { setStatus("Error: " + data.error, "error"); return; }
+
+    // Show main layout
+    document.getElementById("upload-placeholder").classList.add("hidden");
+    document.getElementById("main-layout").classList.remove("hidden");
+
+    // Load grid
+    CanvasManager.loadGrid(data.grid_w, data.grid_h, data.thumb);
+
+    // Reset overlays and compare
+    HeatmapManager.reset();
+    CompareManager.setCompareMode(false);
+
+    setStatus(
+      `Loaded: ${data.grid_w}×${data.grid_h} grid (${data.grid_w * data.grid_h} blocks, block size ${data.block_size}px)`,
+      "success"
+    );
+
+    // Load summary
+    await fetchSummary();
+
+    setTimeout(clearStatus, 4000);
+
+  } catch (err) {
+    setStatus("Upload failed: " + err.message, "error");
+  }
+}
+
+// ── Pixel fetch ──────────────────────────────────────────────────────────────
+async function fetchPixel(x, y) {
+  try {
+    const res = await fetch(`/pixel?x=${x}&y=${y}`);
+    const d = await res.json();
+    if (d.error) return;
+
+    document.getElementById("insp-pos").textContent = `(${d.x}, ${d.y})`;
+    document.getElementById("insp-rgb").textContent = `${d.R}  ${d.G}  ${d.B}`;
+    document.getElementById("insp-hex").textContent = d.HEX;
+    document.getElementById("insp-hsl").textContent = `${d.H}°  ${d.S}%  ${d.L}%`;
+    document.getElementById("insp-peak").textContent = d.peak_nm + " nm";
+    document.getElementById("insp-energy").textContent = d.energy;
+    document.getElementById("insp-cct").textContent = d.color_temp_K > 0 ? `~${d.color_temp_K}K` : "—";
+
+    const catEl = document.getElementById("insp-category");
+    catEl.innerHTML = `<span class="badge ${d.warmth} ${d.category}">${d.category}</span>`;
+
+    document.getElementById("inspector-swatch").style.background = d.HEX;
+
+    Charts.updateSingleChart(d.spectrum, d.HEX, `${d.HEX} @ (${d.x},${d.y})`);
+
+  } catch (err) {
+    console.error("Pixel fetch error:", err);
+  }
+}
+
+// ── Summary fetch ─────────────────────────────────────────────────────────────
+async function fetchSummary() {
+  try {
+    const res = await fetch("/summary");
+    const d = await res.json();
+    if (d.error) return;
+
+    document.getElementById("kpi-blocks").textContent = d.total_blocks.toLocaleString();
+    document.getElementById("kpi-warm").textContent = d.warm_count.toLocaleString();
+    document.getElementById("kpi-cool").textContent = d.cool_count.toLocaleString();
+    document.getElementById("kpi-ratio").textContent = (d.warm_ratio * 100).toFixed(1) + "%";
+
+    Charts.updateAvgSpecChart(d.avg_spectrum);
+    Charts.updateEnergyDistChart(d.avg_spectrum);
+    Charts.updatePeakHistChart(d.peak_histogram);
+    Charts.updateWarmCoolChart(d.warm_count, d.cool_count);
+
+    // Top 5 swatches
+    const swatchRow = document.getElementById("top5-swatches");
+    swatchRow.innerHTML = "";
+    d.top5_colors.forEach(({ hex, count }) => {
+      swatchRow.innerHTML += `
+        <div class="swatch-item">
+          <div class="swatch-box" style="background:${hex}"></div>
+          <span class="swatch-label">${hex}</span>
+          <span class="swatch-label">${count}</span>
+        </div>`;
+    });
+
+  } catch (err) {
+    console.error("Summary fetch error:", err);
+  }
+}
+</script>
+
+</body>
+</html>
